@@ -111,6 +111,23 @@ class ClickCommand(BaseCommand):
     target: str | None = Field(default=None, description="UI element text to find")
 
 
+class DoubleClickCommand(BaseCommand):
+    action: Literal[ActionType.DOUBLE_CLICK] = ActionType.DOUBLE_CLICK
+    x: int | None = None
+    y: int | None = None
+
+
+class RightClickCommand(BaseCommand):
+    action: Literal[ActionType.RIGHT_CLICK] = ActionType.RIGHT_CLICK
+    x: int | None = None
+    y: int | None = None
+
+
+class ScrollCommand(BaseCommand):
+    action: Literal[ActionType.SCROLL] = ActionType.SCROLL
+    clicks: int = 1
+
+
 class TypeTextCommand(BaseCommand):
     action: Literal[ActionType.TYPE_TEXT] = ActionType.TYPE_TEXT
     text: str
@@ -120,6 +137,11 @@ class TypeTextCommand(BaseCommand):
 class HotkeyCommand(BaseCommand):
     action: Literal[ActionType.HOTKEY] = ActionType.HOTKEY
     keys: list[str]
+
+
+class PressKeyCommand(BaseCommand):
+    action: Literal[ActionType.PRESS_KEY] = ActionType.PRESS_KEY
+    key: str
 
 
 # ── Web ────────────────────────────────────────────────
@@ -167,7 +189,11 @@ AnyCommand = (
     | CreateFolderCommand
     | OpenFolderCommand
     | ClickCommand
+    | DoubleClickCommand
+    | RightClickCommand
+    | ScrollCommand
     | TypeTextCommand
+    | PressKeyCommand
     | HotkeyCommand
     | OpenUrlCommand
     | SearchWebCommand
