@@ -6,6 +6,7 @@ tkinter — встроен в Python, 0 зависимостей.
 
 from __future__ import annotations
 
+import asyncio
 import platform
 from pathlib import Path
 from typing import Any, Callable
@@ -18,6 +19,7 @@ from core.event_bus import event_bus
 from .sprite_widget import SpriteAnimator
 from .hotkey import GlobalHotkey
 from .drag_drop import DragDropHandler
+from .chat_dialog import ChatDialog
 
 # Эмодзи для состояний (пока нет PNG-спрайтов)
 STATE_EMOJI = {
@@ -52,7 +54,7 @@ class RuslanOverlay:
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.92)
 
-        # Тёмный фон для «прозрачности» на тёмном рабочем столе
+        # Тёмный фон
         self.root.configure(bg="#1e1e1e")
 
         self.root.geometry(f"{self._size}x{self._size}+100+100")
@@ -66,6 +68,7 @@ class RuslanOverlay:
             highlightthickness=0,
             bg="#1e1e1e",
             bd=0,
+            cursor="hand2",
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
@@ -90,6 +93,16 @@ class RuslanOverlay:
             tags="status",
         )
 
+        # Подпись «Нажми, чтобы спросить»
+        self.hint_id = self.canvas.create_text(
+            self._size // 2,
+            self._size - 12,
+            text="спросить",
+            font=("Helvetica", 8),
+            fill="#555555",
+            tags="hint",
+        )
+
         # Аниматор
         self.animator = SpriteAnimator(
             assets_dir=settings.assets_dir,
@@ -99,10 +112,10 @@ class RuslanOverlay:
         # Запуск анимации
         self._tick_animation()
 
-        # Drag-and-drop (tkinter — ограниченная поддержка на macOS)
+        # Drag-and-drop
         self.drag_drop = DragDropHandler(on_file_dropped=self._on_files_dropped)
 
-        # Горячая клавиша Cmd+Shift+R
+        # Горячая клавиша
         hotkey = settings.ui_hotkey
         if hotkey and hotkey.strip():
             self.hotkey = GlobalHotkey(
@@ -116,12 +129,45 @@ class RuslanOverlay:
         # Позиция: правый нижний угол
         self.root.after(100, self._place_in_corner)
 
+        # Клик по спрайту → диалог ввода
+        self.canvas.tag_bind("sprite", "<Button-1>", self._on_click_sprite)
+        self.canvas.tag_bind("hint", "<Button-1>", self._on_click_sprite)
+        self.root.bind("<Button-1>", self._on_click_sprite)
+
+        # Диалог чата (создаётся по клику)
+        self._chat_dialog: ChatDialog | None = None
+
         logger.info("🛡 Оверлей Руслана запущен (tkinter)")
-        import asyncio
         try:
             asyncio.get_event_loop().create_task(event_bus.emit("ui:ready"))
         except RuntimeError:
-            pass  # нет event loop
+            pass
+
+    def _on_click_sprite(self, event=None) -> None:
+        """Клик по спрайту — открыть диалог ввода."""
+        self._open_chat()
+
+    def _open_chat(self) -> None:
+        """Открыть окно чата для ввода запроса."""
+        if self._chat_dialog and self._chat_dialog.is_open:
+            self._chat_dialog.focus()
+            return
+
+        self._chat_dialog = ChatDialog(
+            brain=self.brain,
+            on_response=self._on_chat_response,
+            on_close=self._on_chat_close,
+        )
+        self._chat_dialog.open()
+
+    def _on_chat_response(self, text: str) -> None:
+        """Ответ получен — показать реакцию."""
+        self.set_animation("happy")
+        self.root.after(3000, lambda: self.set_animation("idle"))
+
+    def _on_chat_close(self) -> None:
+        """Диалог закрыт."""
+        self._chat_dialog = None
 
     def _on_animation_frame(self, path: str) -> None:
         """Смена кадра анимации — пока заглушка (нет PNG)."""
@@ -164,19 +210,23 @@ class RuslanOverlay:
         """Файл сброшен на персонажа — отправить в Brain."""
         logger.info(f"Файлы сброшены: {[p.name for p in paths]}")
         if self.brain and paths:
-            import anyio
-
-            for path in paths[:3]:  # макс 3 за раз
-                anyio.from_thread.run(
-                    self.brain.process_request,
-                    f"прочитай файл {path} и сделай краткое содержание",
-                )
+            for path in paths[:3]:
+                try:
+                    asyncio.get_event_loop().create_task(
+                        self.brain.process_request(
+                            f"прочитай файл {path} и сделай краткое содержание",
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"Ошибка отправки файла: {e}")
         self.set_animation("happy")
         self.root.after(2000, lambda: self.set_animation("idle"))
 
     def close(self) -> None:
         """Остановить всё при закрытии."""
         self.hotkey.stop()
+        if self._chat_dialog:
+            self._chat_dialog.close()
         self.root.destroy()
         logger.info("Оверлей завершён")
 
@@ -187,9 +237,6 @@ class RuslanOverlay:
 
         overlay = cls(brain=brain)
         overlay.root.protocol("WM_DELETE_WINDOW", overlay.close)
-
-        # Обработка Cmd+Q
         overlay.root.bind_all("<Command-q>", lambda e: overlay.close())
-
         overlay.root.mainloop()
         return overlay
