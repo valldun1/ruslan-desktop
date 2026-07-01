@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import tkinter as tk
+from tkinter import scrolledtext
 from typing import Any, Callable
 
 from loguru import logger
@@ -26,9 +28,6 @@ class ChatDialog:
         self.on_response = on_response
         self.on_close = on_close
         self.is_open = False
-
-        import tkinter as tk
-        from tkinter import scrolledtext
 
         self.root = tk.Toplevel()
         self.root.title("Руслан — вопрос")
