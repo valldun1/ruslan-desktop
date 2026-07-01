@@ -17,11 +17,11 @@ class MoveFileAction(BaseAction):
         source = Path(command["source"])
         dest = Path(command["destination"])
 
-        if not source.exists():
-            return ActionResult(success=False, error=f"Source not found: {source}", message="Файл не найден")
-
         if dry_run:
             return ActionResult(success=True, message=f"Планируется переместить {source.name} → {dest}")
+
+        if not source.exists():
+            return ActionResult(success=False, error=f"Source not found: {source}", message="Файл не найден")
 
         try:
             dest.parent.mkdir(parents=True, exist_ok=True)
