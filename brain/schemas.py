@@ -36,6 +36,19 @@ class ActionType(str, Enum):
     SCREENSHOT = "screenshot"
     WAIT = "wait"
     MESSAGE = "message"  # show text bubble
+    # Новые действия (системные)
+    SYSTEM_INFO = "system_info"
+    CLIPBOARD_GET = "clipboard_get"
+    CLIPBOARD_SET = "clipboard_set"
+    VOLUME_SET = "volume_set"
+    SPEAK_TEXT = "speak_text"
+    DISK_USAGE = "disk_usage"
+    BATTERY = "battery"
+    WINDOW_MINIMIZE = "window_minimize"
+    LOCK_SCREEN = "lock_screen"
+    EMPTY_TRASH = "empty_trash"
+    RUN_COMMAND = "run_command"
+    OPEN_TRASH = "open_trash"
 
 
 # ── Base Command ─────────────────────────────────────
@@ -177,6 +190,17 @@ class WaitCommand(BaseCommand):
     seconds: float = 1.0
 
 
+class GenericCommand(BaseCommand):
+    """Универсальная команда для новых действий (принимает любые поля)."""
+    action: str  # не Literal, для гибкости
+    text: str | None = None
+    query: str | None = None
+    url: str | None = None
+    volume: int | None = None
+    command: str | None = None
+    confirm: bool = False
+
+
 # ── Union (discriminated by action field) ─────────────
 
 AnyCommand = (
@@ -200,6 +224,7 @@ AnyCommand = (
     | ScreenshotCommand
     | MessageCommand
     | WaitCommand
+    | GenericCommand  # новые действия
 )
 
 

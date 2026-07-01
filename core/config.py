@@ -17,15 +17,33 @@ class Settings(BaseSettings):
     )
 
     # LLM — Hermes (основной)
-    hermes_api_url: str = "http://localhost:8080/v1"
+    hermes_api_url: str = "https://opencode.ai/zen/go/v1"
     hermes_api_key: str = ""
     hermes_model: str = "kimi-k2.5"
+
+    def model_post_init(self, __context) -> None:
+        """Разрешить API ключ после инициализации."""
+        if not self.hermes_api_key:
+            self.hermes_api_key = self._resolve_api_key()
 
     @classmethod
     def _resolve_api_key(cls) -> str:
         """Взять API ключ из OPENCODE_GO_API_KEY если HERMES_API_KEY не задан."""
         import os
         key = os.environ.get("HERMES_API_KEY") or os.environ.get("OPENCODE_GO_API_KEY", "")
+        if not key:
+            # Fallback: прочитать из ~/.hermes/.env
+            try:
+                env_path = Path.home() / ".hermes" / ".env"
+                if env_path.exists():
+                    for line in env_path.read_text().splitlines():
+                        if line.startswith("OPENCODE_GO_API_KEY="):
+                            key = line.split("=", 1)[1].strip().strip("\"'")
+                            if key.startswith("sk-"):
+                                os.environ["OPENCODE_GO_API_KEY"] = key
+                                break
+            except Exception:
+                pass
         return key
 
     # LLM — Ollama (fallback при недоступности Hermes)
