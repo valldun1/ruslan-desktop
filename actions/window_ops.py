@@ -1,17 +1,17 @@
-"""Window and app actions — open, close, find windows."""
+"""Window and app actions — open, close, find windows.
+
+All operations go through platform.get_controller() for OS abstraction.
+"""
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
 from loguru import logger
 
+from core.platform import platform
 from .base import BaseAction, ActionResult
-
-
-IS_WINDOWS = sys.platform == "win32"
 
 
 class OpenAppAction(BaseAction):
@@ -19,19 +19,26 @@ class OpenAppAction(BaseAction):
 
     async def execute(self, command: dict, dry_run: bool = False) -> ActionResult:
         app_name = command["app_name"]
-        args = command.get("arguments")
 
         if dry_run:
             return ActionResult(success=True, message=f"Открыть: {app_name}")
 
         try:
-            if IS_WINDOWS:
-                subprocess.Popen(["start", app_name], shell=True)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", "-a", app_name])
+            ctrl = platform.get_controller()
+            if ctrl:
+                ctrl.init()
+                ctrl.open_app(app_name)
             else:
-                # Linux / Termux fallback
-                subprocess.Popen([app_name] + (args or []))
+                # Fallback: platform default opener
+                if sys.platform == "darwin":
+                    import subprocess
+                    subprocess.Popen(["open", "-a", app_name])
+                elif sys.platform == "win32":
+                    import subprocess
+                    subprocess.Popen(["start", app_name], shell=True)
+                else:
+                    import subprocess
+                    subprocess.Popen([app_name])
             logger.info(f"Opened app: {app_name}")
             return ActionResult(success=True, message=f"Открываю {app_name}")
         except Exception as e:
@@ -52,10 +59,17 @@ class CloseAppAction(BaseAction):
             return ActionResult(success=True, message=f"Закрыть: {app_name}")
 
         try:
-            if IS_WINDOWS:
-                subprocess.run(["taskkill", "/F", "/IM", f"{app_name}.exe"], capture_output=True, text=True)
+            ctrl = platform.get_controller()
+            if ctrl:
+                ctrl.init()
+                ctrl.close_app(app_name)
             else:
-                subprocess.run(["pkill", "-f", app_name], capture_output=True)
+                if sys.platform == "win32":
+                    import subprocess
+                    subprocess.run(["taskkill", "/F", "/IM", f"{app_name}.exe"], capture_output=True, text=True)
+                else:
+                    import subprocess
+                    subprocess.run(["pkill", "-f", app_name], capture_output=True)
             logger.info(f"Closed app: {app_name}")
             return ActionResult(success=True, message=f"Закрываю {app_name}")
         except Exception as e:
@@ -80,12 +94,20 @@ class OpenFolderAction(BaseAction):
             return ActionResult(success=True, message=f"Открыть папку: {path}")
 
         try:
-            if IS_WINDOWS:
-                subprocess.Popen(["explorer", str(path)])
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
+            ctrl = platform.get_controller()
+            if ctrl:
+                ctrl.init()
+                ctrl.open_folder(str(path))
             else:
-                subprocess.Popen(["xdg-open", str(path)])
+                if sys.platform == "darwin":
+                    import subprocess
+                    subprocess.Popen(["open", str(path)])
+                elif sys.platform == "win32":
+                    import subprocess
+                    subprocess.Popen(["explorer", str(path)])
+                else:
+                    import subprocess
+                    subprocess.Popen(["xdg-open", str(path)])
             logger.info(f"Opened folder: {path}")
             return ActionResult(success=True, message=f"Открываю папку: {path.name}")
         except Exception as e:
@@ -106,12 +128,20 @@ class OpenUrlAction(BaseAction):
             return ActionResult(success=True, message=f"Открыть URL: {url}")
 
         try:
-            if IS_WINDOWS:
-                subprocess.Popen(["start", url], shell=True)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", url])
+            ctrl = platform.get_controller()
+            if ctrl:
+                ctrl.init()
+                ctrl.open_url(url)
             else:
-                subprocess.Popen(["xdg-open", url])
+                if sys.platform == "darwin":
+                    import subprocess
+                    subprocess.Popen(["open", url])
+                elif sys.platform == "win32":
+                    import subprocess
+                    subprocess.Popen(["start", url], shell=True)
+                else:
+                    import subprocess
+                    subprocess.Popen(["xdg-open", url])
             logger.info(f"Opened URL: {url}")
             return ActionResult(success=True, message=f"Открываю сайт")
         except Exception as e:

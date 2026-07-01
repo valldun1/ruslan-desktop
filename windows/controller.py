@@ -63,6 +63,11 @@ class WindowsController:
             return
         self._pyautogui.doubleClick(x=x, y=y)
 
+    def right_click(self, x: int | None = None, y: int | None = None) -> None:
+        if not self._pyautogui:
+            return
+        self._pyautogui.click(x=x, y=y, button="right")
+
     def scroll(self, clicks: int) -> None:
         if not self._pyautogui:
             return
@@ -115,6 +120,13 @@ class WindowsController:
                 return False
         return False
 
+    def show_notification(self, title: str, text: str) -> None:
+        """Show Windows notification."""
+        try:
+            from plyer import notification
+            notification.notify(title=title, message=text, timeout=5)
+        except ImportError:
+            logger.warning("plyer not installed — notification skipped")
 
-# Global singleton
+
 windows_controller = WindowsController()
