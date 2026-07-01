@@ -103,7 +103,14 @@ class RuslanOverlay:
         self.drag_drop = DragDropHandler(on_file_dropped=self._on_files_dropped)
 
         # Горячая клавиша Cmd+Shift+R
-        self.hotkey = GlobalHotkey(on_activate=self._toggle_visibility)
+        hotkey = settings.ui_hotkey
+        if hotkey and hotkey.strip():
+            self.hotkey = GlobalHotkey(
+                on_activate=self._toggle_visibility,
+                hotkey=hotkey,
+            )
+        else:
+            self.hotkey = GlobalHotkey(on_activate=self._toggle_visibility, hotkey="")
         self.hotkey.start()
 
         # Позиция: правый нижний угол

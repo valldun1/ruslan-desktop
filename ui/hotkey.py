@@ -38,6 +38,9 @@ class GlobalHotkey:
 
     def start(self) -> None:
         """Запустить прослушивание хоткея в фоновом потоке."""
+        if not self._hotkey:
+            logger.info("Горячая клавиша отключена (пустая строка)")
+            return
         try:
             from pynput import keyboard
             # Комбинация из строки
