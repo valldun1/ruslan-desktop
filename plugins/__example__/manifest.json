@@ -1,0 +1,13 @@
+{
+    "name": "example-plugin",
+    "version": "0.1.0",
+    "description": "Example plugin for Ruslan",
+    "author": "Ruslan Team",
+    "capabilities": [
+        {
+            "action": "hello_world",
+            "description": "Say hello",
+            "params": {}
+        }
+    ]
+}

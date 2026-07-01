@@ -1,0 +1,31 @@
+{
+  "version": "0.1.0",
+  "character": {
+    "name": "Руслан",
+    "width": 300,
+    "height": 400,
+    "opacity": 1.0,
+    "fps": 30,
+    "click_through": true,
+    "always_on_top": true
+  },
+  "voice": {
+    "enabled": false,
+    "wake_word": "руслан",
+    "stt_model": "base",
+    "tts_speaker": "default",
+    "push_to_talk_key": "scroll_lock"
+  },
+  "behavior": {
+    "confirm_on_delete": true,
+    "confirm_on_execute": true,
+    "dry_run_default": false,
+    "max_undo_steps": 10,
+    "log_actions": true
+  },
+  "appearance": {
+    "theme": "dark",
+    "language": "ru",
+    "show_debug_overlay": false
+  }
+}

@@ -1,0 +1,31 @@
+; Godot 4 project configuration for Ruslan character
+; Open this folder in Godot 4 to see the character
+
+[application]
+config/name="Ruslan Character"
+config/description="Ruslan Desktop Agent — visual character overlay"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.2", "Forward Plus")
+config/icon="res://icon.png"
+
+[display]
+window/size/viewport_width=400
+window/size/viewport_height=500
+window/size/window_width_override=400
+window/size/window_height_override=500
+window/dpi/allow_hidpi=true
+window/per_pixel_transparency/allowed=true
+window/transparent=true
+window/transparent_bg=true
+window/borderless=true
+window/always_on_top=true
+window/vsync/vsync_mode=0
+window/energy_saving/reduce_effects=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[input]
+devices/pointing/emulate_touch_from_mouse=false
+
+[rendering]
+textures/canvas_textures/default_texture_filter=0

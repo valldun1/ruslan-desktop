@@ -1,0 +1,48 @@
+# Ruslan Desktop Agent
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.uv/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config
+.env
+config/settings.local.json
+
+# Logs
+logs/*.log
+logs/*.gz
+
+# Voice
+voice/output*.wav
+voice/output*.mp3
+
+# Godot
+character/godot_project/.godot/
+character/godot_project/export/
+
+# Data
+data/*.db
+data/*.db-journal
+data/*.db-wal
+
+# Tests
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml

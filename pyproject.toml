@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ruslan"
+version = "0.1.0"
+description = "Ruslan Desktop Agent — GUI AI Agent для Windows"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Valentin", email = "kap@ruslan.team"},
+]
+
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
+    "websockets>=12,<15",
+    "pydantic>=2.5,<3",
+    "pydantic-settings>=2.0,<3",
+    "pydantic>2",
+    "loguru>=0.7,<1",
+    "anyio>=4,<5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.24,<1",
+    "httpx>=0.27,<1",
+    "mypy>=1.10,<2",
+    "ruff>=0.5,<1",
+    "pre-commit>=3,<4",
+]
+windows = [
+    "pywin32>=306,<308",
+    "pyautogui>=0.9,<1",
+    "keyboard>=0.13,<1",
+    "mouse>=0.7,<1",
+    "psutil>=5.9,<6",
+    "watchdog>=4,<5",
+    "pygetwindow>=0.0.9,<1",
+    "pynput>=1.7,<2",
+]
+voice = [
+    "faster-whisper>=1.0,<2",
+    "TTS>=0.22,<1",
+]
+all = [
+    "ruslan[dev,windows,voice]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["core/", "brain/", "actions/", "windows/", "voice/", "memory/", "api/", "plugins/"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
