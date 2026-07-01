@@ -116,21 +116,30 @@ class HermesGateway:
         return self._fallback_response("Ошибка связи с Гермесом")
 
     async def _try_hermes(self, messages: list[dict]) -> LLMResponse | None:
-        """Попытка отправить запрос в Hermes. Возвращает None при ошибке."""
+        """Попытка отправить запрос в Hermes/OpenAI API. Возвращает None при ошибке."""
         import httpx
 
         last_error = None
         for attempt in range(2):
             try:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                }
+                # Browser headers for Cloudflare (OpenCode Go)
+                if "opencode" in self.api_url:
+                    headers.update({
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36",
+                        "Origin": "https://opencode.ai",
+                        "Referer": "https://opencode.ai/",
+                    })
+
                 async with httpx.AsyncClient(timeout=settings.hermes_timeout) as client:
                     resp = await client.post(
                         f"{self.api_url}/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {self.api_key}",
-                            "Content-Type": "application/json",
-                        },
+                        headers=headers,
                         json={
-                            "model": "hermes",
+                            "model": settings.hermes_model,
                             "messages": messages,
                             "response_format": {"type": "json_object"},
                             "temperature": 0.1,

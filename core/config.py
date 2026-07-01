@@ -18,7 +18,15 @@ class Settings(BaseSettings):
 
     # LLM — Hermes (основной)
     hermes_api_url: str = "http://localhost:8080/v1"
-    hermes_api_key: str = "***"
+    hermes_api_key: str = ""
+    hermes_model: str = "kimi-k2.5"
+
+    @classmethod
+    def _resolve_api_key(cls) -> str:
+        """Взять API ключ из OPENCODE_GO_API_KEY если HERMES_API_KEY не задан."""
+        import os
+        key = os.environ.get("HERMES_API_KEY") or os.environ.get("OPENCODE_GO_API_KEY", "")
+        return key
 
     # LLM — Ollama (fallback при недоступности Hermes)
     ollama_api_url: str = "http://localhost:11434"
