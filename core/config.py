@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     ui_always_on_top: bool = True
     ui_sprite_file: str = "assets/ruslan_idle.png"
     ui_sprite_size: int = 128
-    ui_hotkey: str = "cmd+shift+r"   # macOS
+    ui_hotkey: str = ""  # отключено по умолчанию (macOS accessibility)
     # ui_hotkey: str = "ctrl+shift+r"  # Windows
 
     # Windows/macOS общее
