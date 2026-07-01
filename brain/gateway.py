@@ -12,14 +12,14 @@ from typing import Any
 from loguru import logger
 
 from core.config import settings
-from .schemas import LLMResponse, AnyCommand
+from .schemas import LLMResponse, MessageCommand
 
 # Hermes system prompt that makes it output structured commands
-SYSTEM_PROMPT = """Ты — Гермес, ИИ-координатор визуального агента Руслан.
+SYSTEM_PROMPT = r"""Ты — Гермес, ИИ-координатор визуального агента Руслан.
 
 Твоя задача — превращать запросы пользователя в структурированные команды для Руслана.
 
-Руслан — визуальный персонаж на рабочем столе Windows. Он может:
+Руслан — визуальный персонаж на рабочем столе Windows/macOS. Он может:
 - открывать/закрывать программы
 - перемещать, копировать, удалять файлы
 - искать файлы по имени
@@ -27,29 +27,37 @@ SYSTEM_PROMPT = """Ты — Гермес, ИИ-координатор визуа
 - открывать сайты и папки
 - показывать сообщения
 
-ПРАВИЛА:
-1. Всегда отвечай ТОЛЬКО JSON. Никакого текста вне JSON.
-2. Если задача сложная — разбей на несколько команд.
-3. Опасные действия (delete, execute) помечай requires_confirmation=true.
-4. Добавляй description для каждой команды (человекочитаемое описание).
-5. Если задача невыполнима — верни команду message с объяснением.
-
-Формат ответа:
+Пример:
+Пользователь: "найди договор и открой его"
+Ответ:
 {
-  "plan": ["шаг 1", "шаг 2", ...],
+  "plan": ["Найти файл 'договор'", "Открыть найденный файл"],
   "commands": [
-    {
-      "action": "open_app",
-      "app_name": "Telegram",
-      "description": "Открыть Telegram"
-    }
+    {"action": "search_file", "query": "договор", "description": "Поиск файла договор"},
+    {"action": "message", "text": "Нашёл договор. Открываю.", "description": "Сообщение пользователю"}
   ],
-  "response_text": "Сейчас открою Telegram."
+  "response_text": "Сейчас найду договор."
 }
 
-Доступные action: open_app, close_app, move_file, copy_file, delete_file,
-search_file, create_folder, open_folder, click, type_text, hotkey,
-open_url, search_web, screenshot, message, wait
+ПРАВИЛА:
+1. Всегда отвечай ТОЛЬКО JSON. Никакого текста вне JSON.
+2. Если задача сложная — разбей на несколько команд (до 5).
+3. Опасные действия (delete_file) помечай requires_confirmation=true.
+4. Добавляй description для каждой команды.
+5. Если задача невыполнима — верни команду message с объяснением.
+6. Все пути — абсолютные (начинаются с / или C:\).
+
+Доступные action:
+- open_app, close_app — открыть/закрыть программу
+- move_file, copy_file, delete_file — работа с файлами
+- search_file — поиск файла по имени
+- create_folder, open_folder — работа с папками
+- click, double_click, right_click — клики мыши
+- type_text, press_key, hotkey — клавиатура
+- open_url, search_web — браузер
+- screenshot — снимок экрана
+- wait — пауза
+- message — показать сообщение
 """
 
 
@@ -61,7 +69,10 @@ class HermesGateway:
         self.api_key = api_key or settings.hermes_api_key
 
     async def process_request(self, user_text: str, context: dict | None = None) -> LLMResponse:
-        """Send user request to Hermes, parse structured response."""
+        """Send user request to Hermes, parse structured response.
+        
+        Falls back to a message command if Hermes is unavailable or returns invalid JSON.
+        """
         import httpx
 
         messages = [
@@ -75,23 +86,39 @@ class HermesGateway:
 
         logger.info(f"Sending to Hermes: {user_text[:100]}...")
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{self.api_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "hermes",  # Hermes auto-routes
-                    "messages": messages,
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0.1,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            raw = data["choices"][0]["message"]["content"]
+        # Try up to 2 times
+        last_error = None
+        for attempt in range(2):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{self.api_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "hermes",
+                            "messages": messages,
+                            "response_format": {"type": "json_object"},
+                            "temperature": 0.1,
+                        },
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    raw = data["choices"][0]["message"]["content"]
+                    break
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Hermes attempt {attempt + 1} failed: {e}")
+                if attempt == 0:
+                    # Brief pause before retry
+                    import asyncio
+                    await asyncio.sleep(1)
+                else:
+                    return self._fallback_response(f"Ошибка связи с Гермесом: {e}")
+        else:
+            return self._fallback_response(f"Ошибка связи с Гермесом: {last_error}")
 
         try:
             parsed = json.loads(raw)
@@ -100,12 +127,16 @@ class HermesGateway:
             return response
         except (json.JSONDecodeError, Exception) as e:
             logger.error(f"Failed to parse Hermes response: {e}\nRaw: {raw[:300]}")
-            # Fallback: message command
-            return LLMResponse(
-                plan=["Ошибка обработки"],
-                commands=[AnyCommand(action="message", text="Извини, я не понял команду. Попробуй ещё раз.")],
-                response_text="Ошибка",
-            )
+            return self._fallback_response("Извини, я не понял команду. Попробуй ещё раз.")
+
+    def _fallback_response(self, text: str) -> LLMResponse:
+        """Return a safe fallback when Hermes is unavailable."""
+        logger.warning(f"Using fallback: {text}")
+        return LLMResponse(
+            plan=["Ошибка обработки"],
+            commands=[MessageCommand(text=text, description=text)],
+            response_text=text,
+        )
 
 
 # Global singleton
