@@ -1,24 +1,47 @@
-# 02-plan.md — План исполнения
+# 02-plan.md — план реализации (GLM-5.2)
 
-Сформирован Фазой 1 (subagent с полным контекстом проекта).
+## Goal A: Голосовая активация (L)
 
-## Резюме
+**Файлы:**
+- [ ] `voice/wake_word.py` — детекция «Руслан» (Vosk)
+- [ ] `voice/stt.py` — запись + распознавание команды
+- [ ] `voice/manager.py` — оркестратор (wake → listen → STT → Brain)
+- [ ] `core/main.py` — интеграция VoiceManager
+- [ ] `ui/overlay.py` — статусы «Слушаю...», «Думаю...», «Говорю...»
 
-**11 фаз, ~50 задач, ~45-55 коммитов.**
+**Зависимости:** `vosk` (лёгкий, офлайн), `sounddevice` или `pyobjc-framework-AVFoundation`, `numpy`
 
-| Фаза | Задач | Зависит от | Параллельно |
-|------|-------|-----------|-------------|
-| 0 — Окружение | 6 | — | — |
-| 1 — Платформа + macOS | 7 | 0 | — |
-| 2 — Action Engine | 6 | 1 | — |
-| 3 — Brain/Gateway | 6 | 0 | — |
-| 4 — API Server | 6 | 2 | — |
-| 5 — Godot | 5 | 4 | 2-4 |
-| 6 — Voice | 4 | 0 | 7 |
-| 7 — Plugins | 3 | 0 | 6 |
-| 8 — Memory | 3 | 3 | — |
-| 9 — E2E Tests | 5 | 4,5,6,7,8 | — |
-| 10 — CI | 2 | 9 | — |
-| 11 — Docs/Release | 5 | 10 | — |
+**Альтернативы:** `SpeechRecognition` + Google Web Speech API (если Vosk не ставится)
 
-Полный план: `PLAN.md`
+**Тесты:** `test_wake_word.py`, `test_stt.py`, `test_voice_integration.py`
+
+---
+
+## Goal B: PNG-спрайт персонажа (M)
+
+**Файлы:**
+- [ ] `assets/sprites/idle.png`, `thinking.png`, `speaking.png`, `happy.png`, `sad.png`, `working.png`
+- [ ] `ui/sprite_widget.py` — Pillow ImageTk вместо эмодзи
+- [ ] `ui/overlay.py` — проброс статусов
+
+**Зависимости:** `Pillow` (или встроенный tkinter.PhotoImage)
+
+**Альтернатива:** GIF-спрайты если PNG с альфа глючит
+
+**Тесты:** `test_sprite_widget.py`, `test_overlay_sprite.py`
+
+---
+
+## Goal C: .dmg установщик (L)
+
+**Файлы:**
+- [ ] `build.spec` — PyInstaller конфиг
+- [ ] `scripts/build_dmg.sh` — сборка .app → .dmg
+- [ ] `scripts/com.valldun1.ruslan-desktop.plist` — launchd автозапуск
+- [ ] `assets/app_icon.icns` — иконка
+
+**Зависимости:** `pyinstaller`, нативные `hdiutil`, `cp`
+
+**Альтернатива:** `py2app` (если PyInstaller падает), zip-архив (если hdiutil сложен)
+
+**Тесты:** `test_installer.py`, ручная проверка

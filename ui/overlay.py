@@ -39,8 +39,9 @@ class RuslanOverlay:
     Позиция: правый нижний угол экрана
     """
 
-    def __init__(self, brain=None) -> None:
+    def __init__(self, brain=None, voice_manager=None) -> None:
         self.brain = brain
+        self.voice_manager = voice_manager
         self._visible = True
 
         import tkinter as tk
@@ -72,14 +73,23 @@ class RuslanOverlay:
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Плейсхолдер спрайта (🛡)
-        self.sprite_id = self.canvas.create_text(
+        # Плейсхолдер спрайта — эмодзи (fallback, если нет PNG)
+        self.sprite_text_id = self.canvas.create_text(
             self._size // 2,
             self._size // 2,
             text="🛡",
             font=("Helvetica", 48),
             fill="#00ff88",
             tags="sprite",
+        )
+
+        # Изображение спрайта (PNG через Pillow) — скрыто, пока нет PhotoImage
+        self.sprite_img_id = self.canvas.create_image(
+            self._size // 2,
+            self._size // 2,
+            image=None,
+            tags="sprite",
+            state="hidden",
         )
 
         # Индикатор статуса (🌐 Hermes / 🏠 ollama)
@@ -111,6 +121,10 @@ class RuslanOverlay:
 
         # Запуск анимации
         self._tick_animation()
+
+        # Подписка на статусы VoiceManager (если передан)
+        if self.voice_manager is not None:
+            self.voice_manager._on_status_change = self._on_voice_status
 
         # Drag-and-drop
         self.drag_drop = DragDropHandler(on_file_dropped=self._on_files_dropped)
@@ -169,15 +183,23 @@ class RuslanOverlay:
         """Диалог закрыт."""
         self._chat_dialog = None
 
-    def _on_animation_frame(self, path: str) -> None:
-        """Смена кадра анимации — пока заглушка (нет PNG)."""
-        pass
+    def _on_animation_frame(self, state: str) -> None:
+        """Смена состояния анимации."""
+        logger.debug(f"Смена анимации: {state}")
 
     def _tick_animation(self) -> None:
-        """Тик анимации — обновить эмодзи каждые 500 мс."""
-        state = self.animator.current_state
-        emoji = STATE_EMOJI.get(state, "🛡")
-        self.canvas.itemconfig(self.sprite_id, text=emoji)
+        """Тик анимации — обновить спрайт каждые 500 мс."""
+        photo = self.animator.next_frame()
+        if photo is not None:
+            # Есть PNG — показываем изображение, прячем эмодзи
+            self.canvas.itemconfig(self.sprite_img_id, image=photo, state="normal")
+            self.canvas.itemconfig(self.sprite_text_id, state="hidden")
+        else:
+            # Нет PNG — fallback на эмодзи
+            state = self.animator.current_state
+            emoji = STATE_EMOJI.get(state, "🛡")
+            self.canvas.itemconfig(self.sprite_text_id, text=emoji, state="normal")
+            self.canvas.itemconfig(self.sprite_img_id, state="hidden")
         self.root.after(500, self._tick_animation)
 
     def _place_in_corner(self) -> None:
@@ -206,6 +228,37 @@ class RuslanOverlay:
         """Обновить индикатор статуса (🌐 Hermes / 🏠 ollama)."""
         self.canvas.itemconfig(self.status_id, text=status)
 
+    # ------------------------------------------------------------------
+    # VoiceManager integration
+    # ------------------------------------------------------------------
+
+    def _on_voice_status(self, status: str) -> None:
+        """Обработать смену статуса голосового менеджера.
+
+        Вызывается из фонового потока — используем root.after() для
+        безопасного обновления UI в главном потоке tkinter.
+        """
+        self.root.after(0, self._apply_voice_status, status)
+
+    def _apply_voice_status(self, status: str) -> None:
+        """Применить статус голоса к UI (главный поток tkinter).
+
+        Маппинг:
+            'listening' → анимация thinking + индикатор 🎤
+            'thinking'  → анимация thinking + индикатор 💭
+            'speaking'  → анимация speaking + индикатор 💬
+            'idle'      → анимация idle   + индикатор 🌐
+        """
+        mapping = {
+            "listening": ("thinking", "🎤"),
+            "thinking": ("thinking", "💭"),
+            "speaking": ("speaking", "💬"),
+            "idle": ("idle", "🌐"),
+        }
+        anim, indicator = mapping.get(status, ("idle", "🌐"))
+        self.set_animation(anim)
+        self.set_status(indicator)
+
     def _on_files_dropped(self, paths: list[Path]) -> None:
         """Файл сброшен на персонажа — отправить в Brain."""
         logger.info(f"Файлы сброшены: {[p.name for p in paths]}")
@@ -225,17 +278,19 @@ class RuslanOverlay:
     def close(self) -> None:
         """Остановить всё при закрытии."""
         self.hotkey.stop()
+        if self.voice_manager is not None:
+            self.voice_manager.stop()
         if self._chat_dialog:
             self._chat_dialog.close()
         self.root.destroy()
         logger.info("Оверлей завершён")
 
     @classmethod
-    def launch(cls, brain=None) -> "RuslanOverlay":
+    def launch(cls, brain=None, voice_manager=None) -> "RuslanOverlay":
         """Запустить оверлей (блокирующий вызов mainloop)."""
         import tkinter as tk
 
-        overlay = cls(brain=brain)
+        overlay = cls(brain=brain, voice_manager=voice_manager)
         overlay.root.protocol("WM_DELETE_WINDOW", overlay.close)
         overlay.root.bind_all("<Command-q>", lambda e: overlay.close())
         overlay.root.mainloop()

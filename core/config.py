@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     log_json: bool = False
 
     # Voice
+    voice_enabled: bool = True
     stt_model: str = "base"
     wake_word: str = "руслан"
     tts_engine: Literal["system", "edge"] = "system"  # system = macOS say / Win SAPI

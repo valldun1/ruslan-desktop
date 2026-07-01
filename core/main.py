@@ -52,9 +52,23 @@ def main() -> None:
     # Brain (Hermes + Ollama fallback)
     from brain.gateway import gateway
 
-    # Voice Engine
+    # Voice Engine (TTS/STT низкого уровня)
     from voice.engine import voice_engine
     _ = voice_engine  # инициализация
+
+    # Voice Manager (оркестратор wake-word + STT + brain)
+    voice_manager = None
+    if settings.voice_enabled:
+        try:
+            from voice.manager import VoiceManager
+            voice_manager = VoiceManager(
+                brain=gateway,
+                on_status_change=None,  # коллбэк передадим в оверлей
+            )
+            voice_manager.start()
+            logger.info("VoiceManager запущен")
+        except Exception as e:
+            logger.warning(f"VoiceManager не запущен: {e}")
 
     # Запуск API (опционально, для плагинов)
     api_task = None
@@ -84,7 +98,7 @@ def main() -> None:
             from ui.overlay import RuslanOverlay
 
             # Оверлей — PyQt5, блокирует основной поток
-            RuslanOverlay.launch(brain=gateway)
+            RuslanOverlay.launch(brain=gateway, voice_manager=voice_manager)
         except ImportError as e:
             logger.warning(f"UI не запущен: {e}. Установи PyQt5: pip install ruslan[ui]")
             # Без UI — просто ждём
