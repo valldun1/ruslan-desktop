@@ -1,0 +1,23 @@
+{
+    "name": "browser",
+    "version": "0.1.0",
+    "description": "Browser automation via Playwright",
+    "author": "Ruslan Team",
+    "capabilities": [
+        {
+            "action": "browser_navigate",
+            "description": "Перейти на URL в браузере",
+            "params": {"url": "string"}
+        },
+        {
+            "action": "browser_click",
+            "description": "Кликнуть на элемент по CSS-селектору",
+            "params": {"selector": "string"}
+        },
+        {
+            "action": "browser_extract",
+            "description": "Извлечь текст со страницы",
+            "params": {"selector": "string", "attribute": "string (optional)"}
+        }
+    ]
+}

@@ -1,0 +1,18 @@
+{
+    "name": "telegram",
+    "version": "0.1.0",
+    "description": "Telegram integration for Ruslan — send/receive messages",
+    "author": "Ruslan Team",
+    "capabilities": [
+        {
+            "action": "send_telegram",
+            "description": "Отправить сообщение в Telegram",
+            "params": {"chat_id": "string", "text": "string"}
+        },
+        {
+            "action": "read_telegram",
+            "description": "Прочитать последние сообщения из Telegram",
+            "params": {"chat_id": "string", "limit": "int"}
+        }
+    ]
+}

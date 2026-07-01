@@ -56,6 +56,29 @@ class Memory:
         )
         self._conn.commit()
 
+    def get_history(self, limit: int = 10) -> list[dict]:
+        if not self._conn:
+            return []
+        cursor = self._conn.execute(
+            "SELECT user_input, hermes_response, actions, timestamp FROM history ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        return [
+            {
+                "user_input": row[0],
+                "hermes_response": row[1],
+                "actions": json.loads(row[2] or "[]"),
+                "timestamp": row[3],
+            }
+            for row in cursor.fetchall()
+        ]
+
+    def clear_history(self) -> None:
+        if not self._conn:
+            return
+        self._conn.execute("DELETE FROM history")
+        self._conn.commit()
+
     def get_setting(self, key: str, default: str | None = None) -> str | None:
         if not self._conn:
             return default

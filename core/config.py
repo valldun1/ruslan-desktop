@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     memory_backend: Literal["sqlite", "postgres"] = "sqlite"
     sqlite_path: str = "data/ruslan.db"
 
+    # Telegram plugin
+    telegram_api_id: str = ""
+    telegram_api_hash: str = ""
+
     @property
     def root_dir(self) -> Path:
         return Path(__file__).resolve().parent.parent

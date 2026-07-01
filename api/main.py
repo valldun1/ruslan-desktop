@@ -107,6 +107,75 @@ async def chat_endpoint(payload: dict):
     }
 
 
+@app.post("/animate")
+async def animate(payload: dict):
+    """Send animation command to Godot character."""
+    event = payload.get("event", "action:anim")
+    data = payload.get("data", {})
+    msg = json.dumps({"event": event, "data": data}, ensure_ascii=False)
+    for conn in godot_connections.copy():
+        try:
+            await conn.send_text(msg)
+        except Exception:
+            godot_connections.remove(conn)
+    return {"sent": True, "connections": len(godot_connections)}
+
+
+# ── History / Settings Endpoints ──
+
+
+@app.get("/history")
+async def get_history(limit: int = 10):
+    """Get recent command history."""
+    from memory.store import memory
+    return {"history": memory.get_history(limit)}
+
+
+@app.delete("/history")
+async def clear_history():
+    """Clear all history."""
+    from memory.store import memory
+    memory.clear_history()
+    return {"status": "cleared"}
+
+
+@app.get("/settings/{key}")
+async def get_setting(key: str):
+    """Get a setting value."""
+    from memory.store import memory
+    return {"key": key, "value": memory.get_setting(key)}
+
+
+@app.put("/settings/{key}")
+async def set_setting(key: str, payload: dict):
+    """Set a setting value."""
+    from memory.store import memory
+    value = payload.get("value", "")
+    memory.set_setting(key, value)
+    return {"key": key, "value": value}
+
+
+# ── Voice Endpoint ──
+
+
+@app.post("/voice")
+async def voice_endpoint(payload: dict):
+    """Receive audio → STT → Hermes → Execute → TTS."""
+    from voice.engine import voice_engine
+    audio_path = payload.get("audio_path", "")
+    if not audio_path:
+        return {"error": "audio_path required"}
+    text = await voice_engine.transcribe(audio_path)
+    llm_response = await gateway.process_request(text)
+    response_text = llm_response.response_text or "Готово"
+    audio_out = await voice_engine.speak(response_text)
+    return {
+        "transcribed": text,
+        "response_text": response_text,
+        "audio_output": audio_out,
+    }
+
+
 # ── WebSocket Endpoints ─────────────────────────────
 
 
