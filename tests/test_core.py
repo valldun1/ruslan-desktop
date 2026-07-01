@@ -34,6 +34,15 @@ class TestEventBus:
         await event_bus.emit("test:multi")
         assert len(results) == 2
 
+    @pytest.mark.asyncio
+    async def test_unsubscribe(self):
+        results = []
+        async def handler(**data): results.append(data)
+        event_bus.subscribe("test:unsub", handler)
+        event_bus.unsubscribe("test:unsub", handler)
+        await event_bus.emit("test:unsub", value=1)
+        assert len(results) == 0
+
 
 class TestTaskQueue:
     @pytest.mark.asyncio
@@ -43,8 +52,18 @@ class TestTaskQueue:
         assert task.status == TaskStatus.PENDING
         assert task.command["action"] == "test"
 
-    def test_cancel(self):
-        pass  # placeholder
+    @pytest.mark.asyncio
+    async def test_task_complete(self):
+        task = await task_queue.enqueue({"action": "test"})
+        await task_queue.task_complete(task, {"ok": True}, None)
+        assert task.status == TaskStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_task_fail(self):
+        task = await task_queue.enqueue({"action": "test"})
+        await task_queue.task_complete(task, None, "error")
+        assert task.status == TaskStatus.FAILED
+        assert task.error == "error"
 
     def test_task_id_unique(self):
         t1 = Task({"action": "a"})
@@ -55,5 +74,15 @@ class TestTaskQueue:
 class TestConfig:
     def test_defaults(self):
         assert settings.api_port == 8000
-        assert settings.log_level == "DEBUG"
+        assert settings.log_level == "INFO"
         assert settings.wake_word == "руслан"
+        assert settings.ollama_fallback is True
+        assert settings.ollama_model == "llama3.2"
+        assert settings.ui_enabled is True
+        assert settings.ui_sprite_size == 128
+
+    def test_assets_dir(self):
+        assert (settings.assets_dir / "ruslan_idle.png").name == "ruslan_idle.png"
+
+    def test_root_dir_exists(self):
+        assert settings.root_dir.exists()

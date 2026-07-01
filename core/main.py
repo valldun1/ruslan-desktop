@@ -1,10 +1,9 @@
-"""Ruslan — main entry point.
+"""Ruslan Desktop Agent — точка входа.
 
-Launches all services:
-1. Logger
-2. Memory DB
-3. API server (FastAPI + WebSocket)
-4. Optional: Voice engine, Godot character
+Запускает:
+1. API сервер (для плагинов, WebSocket)
+2. UI оверлей (PyQt5, замена Godot)
+3. Brain + Action Engine
 """
 
 from __future__ import annotations
@@ -12,64 +11,100 @@ from __future__ import annotations
 import asyncio
 import signal
 import sys
+from pathlib import Path
 
 from loguru import logger
 
 from core.config import settings
-from core.logger import setup_logging
 from core.event_bus import event_bus
-from core.task_queue import task_queue
 
 
-async def shutdown(sig: signal.Signals) -> None:
-    logger.info(f"Received {sig.name}, shutting down...")
-    await event_bus.emit("system:shutdown")
-    sys.exit(0)
+def setup_logging() -> None:
+    """Настроить loguru."""
+    log_path = Path(settings.log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    logger.remove()
+    logger.add(
+        sys.stderr,
+        level=settings.log_level,
+        format="<level>{level: <8}</level> | {message}",
+    )
+    logger.add(
+        log_path,
+        level="DEBUG",
+        rotation="10 MB",
+        retention=3,
+    )
+    logger.info(f"Ruslan v0.2.0 — log: {log_path}")
 
 
 def main() -> None:
+    """Главная точка входа: ruslan."""
     setup_logging()
-    logger.info("=" * 60)
-    logger.info("Ruslan Desktop Agent v0.1.0")
-    logger.info("=" * 60)
+    logger.info("Ruslan Desktop Agent запуск...")
 
-    # Init memory
-    from memory.store import memory
-    memory.connect()
-
-    # Register actions
-    import actions  # noqa: F401
+    # Регистрация действий
     from actions.engine import action_engine
-    caps = action_engine.get_capabilities()
-    logger.info(f"Registered {len(caps)} capabilities")
+    action_engine.register_all()
+    logger.info(f"Action Engine: {len(action_engine._registry)} действий")
 
-    # Load plugins
-    from plugins.manager import plugin_manager
-    plugin_actions = plugin_manager.load_all()
-    for action_cls in plugin_actions:
-        action_engine.register(action_cls)
+    # Brain (Hermes + Ollama fallback)
+    from brain.gateway import gateway
 
-    # Start task queue processor
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.create_task(task_queue.process_loop())
+    # Voice Engine
+    from voice.engine import voice_engine
+    _ = voice_engine  # инициализация
 
-    # Handle signals
-    for sig in (signal.SIGTERM, signal.SIGINT):
+    # Запуск API (опционально, для плагинов)
+    api_task = None
+    if settings.api_port:
         try:
-            loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(shutdown(s)))
-        except (ValueError, NotImplementedError):
-            pass  # Windows doesn't support add_signal_handler
+            import uvicorn
+            from api.main import app
 
-    # Start API
-    from api.main import app
-    import uvicorn
-    uvicorn.run(
-        app,
-        host=settings.api_host,
-        port=settings.api_port,
-        log_level=settings.log_level.lower(),
-    )
+            def run_api() -> None:
+                uvicorn.run(
+                    app,
+                    host=settings.api_host,
+                    port=settings.api_port,
+                    log_level=settings.log_level.lower(),
+                )
+
+            import threading
+            api_thread = threading.Thread(target=run_api, daemon=True)
+            api_thread.start()
+            logger.info(f"API запущен: http://{settings.api_host}:{settings.api_port}")
+        except Exception as e:
+            logger.warning(f"API не запущен: {e}")
+
+    # Запуск UI оверлея
+    if settings.ui_enabled:
+        try:
+            from ui.overlay import RuslanOverlay
+
+            # Оверлей — PyQt5, блокирует основной поток
+            RuslanOverlay.launch(brain=gateway)
+        except ImportError as e:
+            logger.warning(f"UI не запущен: {e}. Установи PyQt5: pip install ruslan[ui]")
+            # Без UI — просто ждём
+            try:
+                import anyio
+                anyio.run(asyncio.Event().wait)
+            except KeyboardInterrupt:
+                pass
+        except Exception as e:
+            logger.error(f"UI ошибка: {e}")
+    else:
+        # Без UI — консольный режим
+        logger.info("UI отключён — консольный режим")
+        try:
+            import anyio
+            anyio.run(asyncio.Event().wait)
+        except KeyboardInterrupt:
+            pass
+
+    logger.info("Ruslan завершён")
 
 
 if __name__ == "__main__":

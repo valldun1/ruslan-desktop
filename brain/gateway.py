@@ -1,7 +1,7 @@
-"""Brain Gateway — Hermes LLM integration.
+"""Brain Gateway — Hermes LLM integration + Ollama fallback.
 
-Sends user requests to Hermes, receives structured JSON commands.
-Uses OpenAI-compatible API (Hermes / any LLM with function calling).
+Отправляет запросы пользователя в LLM (Hermes), получает структурированные JSON.
+При недоступности Hermes — переключается на локальную Ollama.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from loguru import logger
 from core.config import settings
 from .schemas import LLMResponse, MessageCommand
 
-# Hermes system prompt that makes it output structured commands
+# Системный промпт для Hermes
 SYSTEM_PROMPT = r"""Ты — Гермес, ИИ-координатор визуального агента Руслан.
 
 Твоя задача — превращать запросы пользователя в структурированные команды для Руслана.
@@ -62,35 +62,56 @@ SYSTEM_PROMPT = r"""Ты — Гермес, ИИ-координатор визу�
 
 
 class HermesGateway:
-    """HTTP client to Hermes LLM API."""
+    """HTTP client to Hermes LLM API with Ollama fallback."""
 
     def __init__(self, api_url: str | None = None, api_key: str | None = None) -> None:
         self.api_url = (api_url or settings.hermes_api_url).rstrip("/")
         self.api_key = api_key or settings.hermes_api_key
+        self._is_local = False  # True = используем ollama
+
+    @property
+    def using_local(self) -> bool:
+        """True если сейчас используем Ollama вместо Hermes."""
+        return self._is_local
 
     async def process_request(self, user_text: str, context: dict | None = None) -> LLMResponse:
-        """Send user request to Hermes, parse structured response.
-        
-        Falls back to a message command if Hermes is unavailable or returns invalid JSON.
-        """
-        import httpx
+        """Send user request to LLM, parse structured response.
 
+        Пытается Hermes ×2. Если оба раза ошибка — fallback на Ollama.
+        """
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
         ]
-
         if context:
             messages.append({"role": "user", "content": json.dumps(context, ensure_ascii=False)})
-
         messages.append({"role": "user", "content": user_text})
 
-        logger.info(f"Sending to Hermes: {user_text[:100]}...")
+        logger.info(f"Sending to LLM: {user_text[:100]}...")
 
-        # Try up to 2 times
+        # Попытка 1-2: Hermes
+        if not self._is_local:
+            result = await self._try_hermes(messages)
+            if result is not None:
+                return result
+
+        # Fallback: Ollama
+        if settings.ollama_fallback:
+            logger.info("Hermes недоступен — пробуем Ollama")
+            result = await self._try_ollama(messages)
+            if result is not None:
+                return result
+            return self._fallback_response("Ошибка: Hermes и Ollama недоступны")
+
+        return self._fallback_response("Ошибка связи с Гермесом")
+
+    async def _try_hermes(self, messages: list[dict]) -> LLMResponse | None:
+        """Попытка отправить запрос в Hermes. Возвращает None при ошибке."""
+        import httpx
+
         last_error = None
         for attempt in range(2):
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=settings.hermes_timeout) as client:
                     resp = await client.post(
                         f"{self.api_url}/chat/completions",
                         headers={
@@ -107,30 +128,67 @@ class HermesGateway:
                     resp.raise_for_status()
                     data = resp.json()
                     raw = data["choices"][0]["message"]["content"]
-                    break
+                    return self._parse_response(raw)
             except Exception as e:
                 last_error = e
                 logger.warning(f"Hermes attempt {attempt + 1} failed: {e}")
                 if attempt == 0:
-                    # Brief pause before retry
                     import asyncio
                     await asyncio.sleep(1)
-                else:
-                    return self._fallback_response(f"Ошибка связи с Гермесом: {e}")
-        else:
-            return self._fallback_response(f"Ошибка связи с Гермесом: {last_error}")
+
+        logger.error(f"Hermes failed after 2 attempts: {last_error}")
+        self._is_local = True
+        return None
+
+    async def _try_ollama(self, messages: list[dict]) -> LLMResponse | None:
+        """Отправить запрос в локальную Ollama."""
+        import httpx
 
         try:
+            # Ollama API: /api/chat
+            ollama_messages = [
+                {"role": m["role"], "content": m["content"]}
+                for m in messages
+            ]
+            url = f"{settings.ollama_api_url}/api/chat"
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    url,
+                    json={
+                        "model": settings.ollama_model,
+                        "messages": ollama_messages,
+                        "stream": False,
+                        "options": {"temperature": 0.1},
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                raw = data["message"]["content"]
+                return self._parse_response(raw)
+        except Exception as e:
+            logger.error(f"Ollama failed: {e}")
+            return None
+
+    def _parse_response(self, raw: str) -> LLMResponse | None:
+        """Распарсить JSON-ответ LLM в LLMResponse."""
+        try:
             parsed = json.loads(raw)
+            # Ollama может обернуть JSON в текст — попробуем извлечь
+            if isinstance(parsed, dict) and "commands" not in parsed:
+                # Поиск JSON в тексте
+                import re
+                match = re.search(r'\{[^{}]*"commands"[^{}]*\}', raw, re.DOTALL)
+                if match:
+                    parsed = json.loads(match.group())
             response = LLMResponse(**parsed)
-            logger.info(f"Hermes responded: {len(response.commands)} command(s)")
+            logger.info(f"LLM responded: {len(response.commands)} command(s)")
             return response
         except (json.JSONDecodeError, Exception) as e:
-            logger.error(f"Failed to parse Hermes response: {e}\nRaw: {raw[:300]}")
-            return self._fallback_response("Извини, я не понял команду. Попробуй ещё раз.")
+            logger.error(f"Failed to parse LLM response: {e}\nRaw: {raw[:300]}")
+            return None
 
     def _fallback_response(self, text: str) -> LLMResponse:
-        """Return a safe fallback when Hermes is unavailable."""
+        """Безопасный fallback, когда LLM недоступен."""
         logger.warning(f"Using fallback: {text}")
         return LLMResponse(
             plan=["Ошибка обработки"],
