@@ -29,6 +29,25 @@ from .window_ops import (
     OpenFolderAction,
     OpenUrlAction,
 )
+from .mouse_ops import (
+    ClickAction,
+    DoubleClickAction,
+    RightClickAction,
+    ScrollAction,
+)
+from .keyboard_ops import (
+    TypeTextAction,
+    PressKeyAction,
+    HotkeyAction,
+)
+from .web_ops import (
+    SearchWebAction,
+)
+from .utility_ops import (
+    ScreenshotAction,
+    WaitAction,
+    MessageAction,
+)
 
 
 class ActionEngine:
@@ -56,6 +75,17 @@ class ActionEngine:
             CloseAppAction,
             OpenFolderAction,
             OpenUrlAction,
+            ClickAction,
+            DoubleClickAction,
+            RightClickAction,
+            ScrollAction,
+            TypeTextAction,
+            PressKeyAction,
+            HotkeyAction,
+            SearchWebAction,
+            ScreenshotAction,
+            WaitAction,
+            MessageAction,
         ]
         for cls in action_classes:
             self.register(cls)
