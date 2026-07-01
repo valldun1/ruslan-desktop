@@ -1,7 +1,7 @@
-"""Главное окно оверлея — спрайт Always On Top на tkinter.
+"""Главное окно оверлея — неоновый персонаж Always On Top на tkinter.
 
-Замена PyQt5 (не собирается на macOS 10.13).
-tkinter — встроен в Python, 0 зависимостей.
+Рисует неонового человечка (NeonCharacter) на Canvas.
+Без PNG-зависимостей, вся анимация процедурная.
 """
 
 from __future__ import annotations
@@ -16,27 +16,18 @@ from loguru import logger
 from core.config import settings
 from core.event_bus import event_bus
 
-from .sprite_widget import SpriteAnimator
+from .neon_character import NeonCharacter
 from .hotkey import GlobalHotkey
 from .drag_drop import DragDropHandler
 from .chat_dialog import ChatDialog
 
-# Эмодзи для состояний (пока нет PNG-спрайтов)
-STATE_EMOJI = {
-    "idle": "🛡",
-    "thinking": "💭",
-    "speaking": "💬",
-    "happy": "✨",
-    "sad": "😢",
-    "working": "⚙️",
-}
-
 
 class RuslanOverlay:
-    """Прозрачное окно со спрайтом Руслана поверх всех окон.
+    """Прозрачное окно с неоновым персонажем поверх всех окон.
 
     Размер: 128×128 (по умолчанию)
     Позиция: правый нижний угол экрана
+    Персонаж: NeonCharacter — процедурная анимация
     """
 
     def __init__(self, brain=None, voice_manager=None) -> None:
@@ -55,44 +46,25 @@ class RuslanOverlay:
         self.root.attributes("-topmost", True)
         self.root.attributes("-alpha", 0.92)
 
-        # Тёмный фон
-        self.root.configure(bg="#1e1e1e")
+        # Чёрный фон (под неон)
+        self.root.configure(bg="#0a0a0a")
 
         self.root.geometry(f"{self._size}x{self._size}+100+100")
         self.root.resizable(False, False)
 
-        # Холст для спрайта
+        # Холст для персонажа
         self.canvas = tk.Canvas(
             self.root,
             width=self._size,
             height=self._size,
             highlightthickness=0,
-            bg="#1e1e1e",
+            bg="#0a0a0a",
             bd=0,
             cursor="hand2",
         )
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
-        # Плейсхолдер спрайта — эмодзи (fallback, если нет PNG)
-        self.sprite_text_id = self.canvas.create_text(
-            self._size // 2,
-            self._size // 2,
-            text="🛡",
-            font=("Helvetica", 48),
-            fill="#00ff88",
-            tags="sprite",
-        )
-
-        # Изображение спрайта (PNG через Pillow) — скрыто, пока нет PhotoImage
-        self.sprite_img_id = self.canvas.create_image(
-            self._size // 2,
-            self._size // 2,
-            image=None,
-            tags="sprite",
-            state="hidden",
-        )
-
-        # Индикатор статуса (🌐 Hermes / 🏠 ollama)
+        # Индикатор статуса (🌐 Hermes / 🏠 ollama / 🎤 слушаю)
         self.status_id = self.canvas.create_text(
             self._size - 12,
             12,
@@ -103,26 +75,29 @@ class RuslanOverlay:
             tags="status",
         )
 
-        # Подпись «Нажми, чтобы спросить»
+        # Подпись «спросить»
         self.hint_id = self.canvas.create_text(
             self._size // 2,
-            self._size - 12,
+            self._size - 10,
             text="спросить",
             font=("Helvetica", 8),
             fill="#555555",
             tags="hint",
         )
 
-        # Аниматор
-        self.animator = SpriteAnimator(
-            assets_dir=settings.assets_dir,
-            on_frame=self._on_animation_frame,
+        # Неоновый персонаж — рисуется в центре Canvas
+        scale = self._size / 80.0  # базовый размер 80px персонажа
+        self.neon = NeonCharacter(
+            canvas=self.canvas,
+            cx=self._size // 2,
+            cy=self._size // 2 + 5,  # чуть ниже центра
+            scale=scale,
         )
 
-        # Запуск анимации
+        # Запуск анимации (каждые 200 мс для плавности)
         self._tick_animation()
 
-        # Подписка на статусы VoiceManager (если передан)
+        # Подписка на статусы VoiceManager
         if self.voice_manager is not None:
             self.voice_manager._on_status_change = self._on_voice_status
 
@@ -143,26 +118,25 @@ class RuslanOverlay:
         # Позиция: правый нижний угол
         self.root.after(100, self._place_in_corner)
 
-        # Клик по спрайту → диалог ввода
-        self.canvas.tag_bind("sprite", "<Button-1>", self._on_click_sprite)
+        # Клик по канвасу → диалог ввода
         self.canvas.tag_bind("hint", "<Button-1>", self._on_click_sprite)
         self.root.bind("<Button-1>", self._on_click_sprite)
 
-        # Диалог чата (создаётся по клику)
+        # Диалог чата
         self._chat_dialog: ChatDialog | None = None
 
-        logger.info("🛡 Оверлей Руслана запущен (tkinter)")
+        logger.info("🟢 Неоновый Руслан запущен (tkinter)")
         try:
             asyncio.get_event_loop().create_task(event_bus.emit("ui:ready"))
         except RuntimeError:
             pass
 
     def _on_click_sprite(self, event=None) -> None:
-        """Клик по спрайту — открыть диалог ввода."""
+        """Клик по персонажу — открыть диалог ввода."""
         self._open_chat()
 
     def _open_chat(self) -> None:
-        """Открыть окно чата для ввода запроса."""
+        """Открыть окно чата."""
         if self._chat_dialog and self._chat_dialog.is_open:
             self._chat_dialog.focus()
             return
@@ -175,7 +149,7 @@ class RuslanOverlay:
         self._chat_dialog.open()
 
     def _on_chat_response(self, text: str) -> None:
-        """Ответ получен — показать реакцию."""
+        """Ответ получен — показать happy."""
         self.set_animation("happy")
         self.root.after(3000, lambda: self.set_animation("idle"))
 
@@ -183,24 +157,10 @@ class RuslanOverlay:
         """Диалог закрыт."""
         self._chat_dialog = None
 
-    def _on_animation_frame(self, state: str) -> None:
-        """Смена состояния анимации."""
-        logger.debug(f"Смена анимации: {state}")
-
     def _tick_animation(self) -> None:
-        """Тик анимации — обновить спрайт каждые 500 мс."""
-        photo = self.animator.next_frame()
-        if photo is not None:
-            # Есть PNG — показываем изображение, прячем эмодзи
-            self.canvas.itemconfig(self.sprite_img_id, image=photo, state="normal")
-            self.canvas.itemconfig(self.sprite_text_id, state="hidden")
-        else:
-            # Нет PNG — fallback на эмодзи
-            state = self.animator.current_state
-            emoji = STATE_EMOJI.get(state, "🛡")
-            self.canvas.itemconfig(self.sprite_text_id, text=emoji, state="normal")
-            self.canvas.itemconfig(self.sprite_img_id, state="hidden")
-        self.root.after(500, self._tick_animation)
+        """Тик анимации — следующий кадр неонового персонажа."""
+        self.neon.next_frame()
+        self.root.after(200, self._tick_animation)
 
     def _place_in_corner(self) -> None:
         """Поместить окно в правый нижний угол экрана."""
@@ -222,10 +182,10 @@ class RuslanOverlay:
 
     def set_animation(self, state: str) -> None:
         """Переключить анимацию персонажа."""
-        self.animator.set_state(state)
+        self.neon.set_state(state)
 
     def set_status(self, status: str) -> None:
-        """Обновить индикатор статуса (🌐 Hermes / 🏠 ollama)."""
+        """Обновить индикатор статуса."""
         self.canvas.itemconfig(self.status_id, text=status)
 
     # ------------------------------------------------------------------
@@ -233,22 +193,11 @@ class RuslanOverlay:
     # ------------------------------------------------------------------
 
     def _on_voice_status(self, status: str) -> None:
-        """Обработать смену статуса голосового менеджера.
-
-        Вызывается из фонового потока — используем root.after() для
-        безопасного обновления UI в главном потоке tkinter.
-        """
+        """Обработать смену статуса голосового менеджера (фоновый поток)."""
         self.root.after(0, self._apply_voice_status, status)
 
     def _apply_voice_status(self, status: str) -> None:
-        """Применить статус голоса к UI (главный поток tkinter).
-
-        Маппинг:
-            'listening' → анимация thinking + индикатор 🎤
-            'thinking'  → анимация thinking + индикатор 💭
-            'speaking'  → анимация speaking + индикатор 💬
-            'idle'      → анимация idle   + индикатор 🌐
-        """
+        """Применить статус голоса к UI (главный поток)."""
         mapping = {
             "listening": ("thinking", "🎤"),
             "thinking": ("thinking", "💭"),
@@ -280,6 +229,7 @@ class RuslanOverlay:
         self.hotkey.stop()
         if self.voice_manager is not None:
             self.voice_manager.stop()
+        self.neon.cleanup()
         if self._chat_dialog:
             self._chat_dialog.close()
         self.root.destroy()
