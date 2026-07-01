@@ -64,7 +64,9 @@ class ActionEngine:
         logger.info(f"Registered action: {name}")
 
     def register_all(self) -> None:
-        """Register all built-in actions."""
+        """Зарегистрировать все встроенные действия (однократно)."""
+        if self._registry:
+            return  # уже зарегистрированы
         action_classes = [
             MoveFileAction,
             CopyFileAction,

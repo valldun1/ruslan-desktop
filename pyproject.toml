@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ruslan"
-version = "0.2.0"
+name = "ruslan-desktop"
+version = "0.2.1"
 description = "Ruslan Desktop Agent — визуальный AI-агент для macOS/Windows"
 requires-python = ">=3.12"
 license = "MIT"
@@ -32,8 +32,6 @@ dev = [
 macos = [
     "pyautogui>=0.9,<1",
     "pygetwindow>=0.0.9,<1",
-    # System TTS — встроенный say, без зависимостей
-    # Global hotkey — pynput для macOS CGEventTap
     "pynput>=1.7,<2",
 ]
 windows = [
@@ -47,12 +45,11 @@ windows = [
     "pynput>=1.7,<2",
 ]
 ui = [
-    "PyQt5>=5.15,<6",
+    # tkinter — встроен в Python, не требует установки
     "pynput>=1.7,<2",
 ]
 voice = [
     "faster-whisper>=1.0,<2",
-    # TTS — системный (say/SAPI). Опционально edge-tts для кастомных голосов
     "edge-tts>=6,<7",
 ]
 plugins = [
@@ -60,11 +57,11 @@ plugins = [
     "playwright>=1.40,<2",
 ]
 all = [
-    "ruslan[dev,macos,ui,voice,plugins]",
+    "ruslan-desktop[dev,macos,ui,voice,plugins]",
 ]
 
 [tool.setuptools.packages.find]
 include = ["core", "actions", "api", "brain", "macos", "memory", "voice", "ui", "windows", "plugins"]
 
 [project.scripts]
-ruslan = "core.main:main"
+ruslan-desktop = "core.main:main"
