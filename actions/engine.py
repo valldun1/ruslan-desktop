@@ -48,6 +48,20 @@ from .utility_ops import (
     WaitAction,
     MessageAction,
 )
+from .system_ops import (
+    SystemInfoAction,
+    ClipboardGetAction,
+    ClipboardSetAction,
+    VolumeSetAction,
+    SpeakTextAction,
+    DiskUsageAction,
+    BatteryAction,
+    WindowMinimizeAction,
+    LockScreenAction,
+    EmptyTrashAction,
+    RunCommandAction,
+    OpenTrashAction,
+)
 
 
 class ActionEngine:
@@ -88,6 +102,18 @@ class ActionEngine:
             ScreenshotAction,
             WaitAction,
             MessageAction,
+            SystemInfoAction,
+            ClipboardGetAction,
+            ClipboardSetAction,
+            VolumeSetAction,
+            SpeakTextAction,
+            DiskUsageAction,
+            BatteryAction,
+            WindowMinimizeAction,
+            LockScreenAction,
+            EmptyTrashAction,
+            RunCommandAction,
+            OpenTrashAction,
         ]
         for cls in action_classes:
             self.register(cls)
